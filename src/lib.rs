@@ -27,6 +27,15 @@ impl CveId {
     pub const fn number(&self) -> CveNumber {
         todo!();
     }
+
+    // https://www.cve.org/ResourcesSupport/AllResources/CNARules#section_5-4_Example_or_Test_CVE_IDs
+    pub const fn is_example_or_test(&self) -> bool {
+        todo!();
+    }
+
+    // TODO: validate if .year is within 1999-$currentYear and .number  >= 1 ?
+    // cf. https://github.com/CVEProject/cve-core/blob/main/src/core/CveId.ts
+    // but this does not appear to be specified, just part of "CVE Services" API/impl
 }
 
 impl core::str::FromStr for CveId {
@@ -105,6 +114,11 @@ mod tests {
     #[test]
     fn test_fromstr() {
         assert_eq!("CVE-1999-0001".parse(), Ok(CveId::new(1999, 1)));
+    }
+
+    #[test]
+    fn test_isexampleortest() {
+        assert!(CveId::new(1900, 666).is_example_or_test());
     }
 }
 

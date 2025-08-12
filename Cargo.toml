@@ -1,6 +1,26 @@
 [package]
 name = "cve-id"
 version = "0.1.0"
+include = [
+    "src/",
+]
 edition = "2024"
+rust-version = "1.85.1"
+description = "Typesafe Common Vulnerabilities and Exposures (CVE) Identifier"
+readme = "README-crate.md"
+repository = "https://github.com/robo9k/cveid-rs"
+license = "MIT OR Apache-2.0"
+categories = ["no-std", "no-std::no-alloc", "parser-implementations"]
+
+[package.metadata.docs.rs]
+targets = []
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+
+[badges]
+maintenance = { status = "experimental" }
+
+[features]
+default = []

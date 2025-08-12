@@ -4,33 +4,164 @@
 #![cfg_attr(docsrs, feature(doc_cfg_hide))]
 #![cfg_attr(docsrs, doc(cfg_hide(docsrs)))]
 
+// TODO: Ord
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct CveId {}
+pub struct CveId {
+    year: CveYear,
+    number: CveNumber,
+}
 
 pub type CveYear = u16;
 pub type CveNumber = u64;
 
+const fn u8_slice_eq(left: &[u8], right: &[u8]) -> bool {
+    match (left, right) {
+        (left, right) => {
+            let mut returned = left.len() == right.len();
+
+            if returned {
+                let mut i = 0;
+
+                while i != left.len() {
+                    if !(left[i] == right[i]) {
+                        returned = false;
+
+                        break;
+                    }
+
+                    i += 1;
+                }
+            }
+
+            returned
+        }
+    }
+}
+
+macro_rules! int_from_ascii {
+    ($func_name:ident, $int_ty:ty) => {
+        const fn $func_name(src: &[u8]) -> Result<$int_ty, ParseCveIdError> {
+            let mut digits = src;
+
+            let mut result = 0;
+
+            macro_rules! unwrap_or_PCE {
+                ($option:expr) => {
+                    match $option {
+                        Some(value) => value,
+                        None => return Err(ParseCveIdError()),
+                    }
+                };
+            }
+
+            #[inline(always)]
+            pub const fn can_not_overflow<T>(digits: &[u8]) -> bool {
+                digits.len() <= core::mem::size_of::<T>() * 2
+            }
+
+            if can_not_overflow::<$int_ty>(digits) {
+                // If the len of the str is short compared to the range of the type
+                // we are parsing into, then we can be certain that an overflow will not occur.
+                // This bound is when `radix.pow(digits.len()) - 1 <= T::MAX` but the condition
+                // above is a faster (conservative) approximation of this.
+                //
+                // Consider radix 16 as it has the highest information density per digit and will thus overflow the earliest:
+                // `u8::MAX` is `ff` - any str of len 2 is guaranteed to not overflow.
+                // `i8::MAX` is `7f` - only a str of len 1 is guaranteed to not overflow.
+                while let [c, rest @ ..] = digits {
+                    result *= 10 as $int_ty;
+                    let x = unwrap_or_PCE!((*c as char).to_digit(10));
+                    result += x as $int_ty;
+                    digits = rest;
+                }
+            } else {
+                while let [c, rest @ ..] = digits {
+                    // When `radix` is passed in as a literal, rather than doing a slow `imul`
+                    // the compiler can use shifts if `radix` can be expressed as a
+                    // sum of powers of 2 (x*10 can be written as x*8 + x*2).
+                    // When the compiler can't use these optimisations,
+                    // the latency of the multiplication can be hidden by issuing it
+                    // before the result is needed to improve performance on
+                    // modern out-of-order CPU as multiplication here is slower
+                    // than the other instructions, we can get the end result faster
+                    // doing multiplication first and let the CPU spends other cycles
+                    // doing other computation and get multiplication result later.
+                    let mul = result.checked_mul(10 as $int_ty);
+                    let x = unwrap_or_PCE!((*c as char).to_digit(10)) as $int_ty;
+                    result = unwrap_or_PCE!(mul);
+                    result = unwrap_or_PCE!(<$int_ty>::checked_add(result, x));
+                    digits = rest;
+                }
+            }
+            Ok(result)
+        }
+    };
+}
+
+int_from_ascii!(u16_from_ascii, u16);
+int_from_ascii!(u64_from_ascii, u64);
+
 impl CveId {
+    const CVE_PREFIX: &[u8] = b"CVE";
+    const SEPARATOR: u8 = b'-';
+
     #[inline]
-    pub const fn new(_year: CveYear, _number: CveNumber) -> Self {
-        todo!();
+    pub const fn new(year: CveYear, number: CveNumber) -> Self {
+        Self { year, number }
     }
 
-    pub const fn from_str(_src: &str) -> Result<Self, ParseCveIdError> {
-        todo!();
+    pub const fn from_str(src: &str) -> Result<Self, ParseCveIdError> {
+        let src = src.as_bytes();
+
+        // CVE-YYYY-NNNN
+        if src.len() < 13 {
+            return Err(ParseCveIdError());
+        }
+
+        if src[3] != Self::SEPARATOR || src[8] != Self::SEPARATOR {
+            return Err(ParseCveIdError());
+        }
+
+        // CVE -YYYY-NNNN
+        let (prefix, rest) = src.split_at(3);
+
+        if !u8_slice_eq(prefix, Self::CVE_PREFIX) {
+            return Err(ParseCveIdError());
+        }
+
+        // - YYYY-NNNN
+        let (_sep, rest) = rest.split_at(1);
+        // YYYY -NNNN
+        let (year, rest) = rest.split_at(4);
+        // - NNNN
+        let (_sep, number) = rest.split_at(1);
+
+        macro_rules! unwrap_or_PCE {
+            ($result:expr) => {
+                match $result {
+                    Ok(value) => value,
+                    Err(_err) => return Err(ParseCveIdError()),
+                }
+            };
+        }
+
+        let year = unwrap_or_PCE!(u16_from_ascii(year));
+        let number = unwrap_or_PCE!(u64_from_ascii(number));
+
+        Ok(Self { year, number })
     }
 
     pub const fn year(&self) -> CveYear {
-        todo!();
+        self.year
     }
 
     pub const fn number(&self) -> CveNumber {
-        todo!();
+        self.number
     }
 
     // https://www.cve.org/ResourcesSupport/AllResources/CNARules#section_5-4_Example_or_Test_CVE_IDs
     pub const fn is_example_or_test(&self) -> bool {
-        todo!();
+        1900 == self.year
     }
 
     // TODO: validate if .year is within 1999-$currentYear and .number  >= 1 ?
@@ -47,8 +178,8 @@ impl core::str::FromStr for CveId {
 }
 
 impl core::fmt::Display for CveId {
-    fn fmt(&self, _f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        todo!();
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "CVE-{:04}-{:04}", self.year, self.number)
     }
 }
 
@@ -56,8 +187,8 @@ impl core::fmt::Display for CveId {
 pub struct ParseCveIdError();
 
 impl core::fmt::Display for ParseCveIdError {
-    fn fmt(&self, _f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        todo!();
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "can not parse CVE ID")
     }
 }
 
@@ -81,7 +212,10 @@ mod tests {
 
     #[test]
     fn test_debug() {
-        assert_eq!(format!("{:?}", CveId::new(1999, 1)), "CveId(1999, 1)");
+        assert_eq!(
+            format!("{:?}", CveId::new(1999, 1)),
+            "CveId { year: 1999, number: 1 }"
+        );
     }
 
     #[test]
@@ -99,6 +233,10 @@ mod tests {
         );
 
         assert_eq!(CveId::from_str("hurz").unwrap_err(), ParseCveIdError());
+        assert_eq!(
+            CveId::from_str("cve-1999-0001").unwrap_err(),
+            ParseCveIdError()
+        );
 
         Ok(())
     }
@@ -119,6 +257,7 @@ mod tests {
     #[test]
     fn test_isexampleortest() {
         assert!(CveId::new(1900, 666).is_example_or_test());
+        assert!(!CveId::new(1999, 1).is_example_or_test());
     }
 }
 

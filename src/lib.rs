@@ -8,6 +8,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg_hide))]
 #![cfg_attr(docsrs, doc(cfg_hide(docsrs)))]
 
+#[cfg(feature = "serde")]
+extern crate alloc;
+
 // TODO: Ord
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct CveId {
@@ -205,6 +208,7 @@ mod serde {
     use crate::CveId;
     use ::serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
     use ::serde::ser::{Serialize, SerializeStruct, Serializer};
+    use alloc::string::{String, ToString};
 
     #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
     impl Serialize for CveId {
@@ -213,7 +217,7 @@ mod serde {
             S: Serializer,
         {
             if serializer.is_human_readable() {
-                todo!()
+                self.to_string().serialize(serializer)
             } else {
                 let mut state = serializer.serialize_struct("CveId", 2)?;
                 state.serialize_field("year", &self.year)?;
@@ -230,7 +234,8 @@ mod serde {
             D: Deserializer<'de>,
         {
             if deserializer.is_human_readable() {
-                todo!()
+                let s = String::deserialize(deserializer)?;
+                CveId::from_str(&s).map_err(de::Error::custom)
             } else {
                 enum Field {
                     Year,
@@ -356,6 +361,18 @@ mod serde {
         }
 
         #[test]
+        fn test_serialize_human() {
+            let serializer = Serializer::builder().is_human_readable(true).build();
+
+            let cve_id = CveId::new(1999, 1);
+
+            assert_ok_eq!(
+                cve_id.serialize(&serializer),
+                [Token::Str("CVE-1999-0001".to_string())]
+            );
+        }
+
+        #[test]
         fn test_deserialize_binary() {
             let mut deserializer = Deserializer::builder([
                 Token::Struct {
@@ -377,12 +394,35 @@ mod serde {
         }
 
         #[test]
+        fn test_deserialize_human() {
+            let mut deserializer = Deserializer::builder([Token::Str("CVE-1999-0001".to_string())])
+                .is_human_readable(true)
+                .build();
+
+            let cve_id = CveId::new(1999, 1);
+
+            assert_ok_eq!(CveId::deserialize(&mut deserializer), cve_id);
+        }
+
+        #[test]
         fn test_roundtrip_binary() {
             let cve_id = CveId::new(1999, 1);
 
             let serializer = Serializer::builder().is_human_readable(false).build();
             let mut deserializer = Deserializer::builder(assert_ok!(cve_id.serialize(&serializer)))
                 .is_human_readable(false)
+                .build();
+
+            assert_ok_eq!(CveId::deserialize(&mut deserializer), cve_id);
+        }
+
+        #[test]
+        fn test_roundtrip_human() {
+            let cve_id = CveId::new(1999, 1);
+
+            let serializer = Serializer::builder().is_human_readable(true).build();
+            let mut deserializer = Deserializer::builder(assert_ok!(cve_id.serialize(&serializer)))
+                .is_human_readable(true)
                 .build();
 
             assert_ok_eq!(CveId::deserialize(&mut deserializer), cve_id);

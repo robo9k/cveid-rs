@@ -10,7 +10,7 @@ description = "Typesafe Common Vulnerabilities and Exposures (CVE) Identifier"
 readme = "README-crate.md"
 repository = "https://github.com/robo9k/cveid-rs"
 license = "MIT OR Apache-2.0"
-categories = ["no-std", "no-std::no-alloc", "parser-implementations"]
+categories = ["no-std", "parser-implementations"]
 
 [package.metadata.docs.rs]
 targets = []

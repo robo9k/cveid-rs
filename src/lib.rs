@@ -7,7 +7,9 @@
 // TODO: Ord
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct CveId {
+    // TODO: u8 would be sufficient for e.g. 1900 + 255 = 2155
     year: CveYear,
+    // TODO: the JSON schema specifies 4-19 digits, but u32 would provide 4_294_967_295 MAX which already seems plenty per year
     number: CveNumber,
 }
 

@@ -1,3 +1,7 @@
+//! # Features
+//!
+//! - `serde` — Enable serializing and deserializing [`CveId`] using `serde` v1
+
 #![deny(unsafe_code)]
 #![cfg_attr(not(any(test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -195,6 +199,196 @@ impl core::fmt::Display for ParseCveIdError {
 }
 
 impl core::error::Error for ParseCveIdError {}
+
+#[cfg(feature = "serde")]
+mod serde {
+    use crate::CveId;
+    use ::serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+    use ::serde::ser::{Serialize, SerializeStruct, Serializer};
+
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+    impl Serialize for CveId {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            if serializer.is_human_readable() {
+                todo!()
+            } else {
+                let mut state = serializer.serialize_struct("CveId", 2)?;
+                state.serialize_field("year", &self.year)?;
+                state.serialize_field("number", &self.number)?;
+                state.end()
+            }
+        }
+    }
+
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+    impl<'de> Deserialize<'de> for CveId {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            if deserializer.is_human_readable() {
+                todo!()
+            } else {
+                enum Field {
+                    Year,
+                    Number,
+                }
+
+                impl<'de> Deserialize<'de> for Field {
+                    fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+                    where
+                        D: Deserializer<'de>,
+                    {
+                        struct FieldVisitor;
+
+                        impl<'de> Visitor<'de> for FieldVisitor {
+                            type Value = Field;
+
+                            fn expecting(
+                                &self,
+                                formatter: &mut core::fmt::Formatter,
+                            ) -> core::fmt::Result {
+                                formatter.write_str("`year` or `number`")
+                            }
+
+                            fn visit_str<E>(self, value: &str) -> Result<Field, E>
+                            where
+                                E: de::Error,
+                            {
+                                match value {
+                                    "year" => Ok(Field::Year),
+                                    "number" => Ok(Field::Number),
+                                    _ => Err(de::Error::unknown_field(value, FIELDS)),
+                                }
+                            }
+                        }
+
+                        deserializer.deserialize_identifier(FieldVisitor)
+                    }
+                }
+
+                struct CveIdVisitor;
+
+                impl<'de> Visitor<'de> for CveIdVisitor {
+                    type Value = CveId;
+
+                    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        formatter.write_str("struct CveId")
+                    }
+
+                    fn visit_seq<V>(self, mut seq: V) -> Result<CveId, V::Error>
+                    where
+                        V: SeqAccess<'de>,
+                    {
+                        let year = seq
+                            .next_element()?
+                            .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                        let number = seq
+                            .next_element()?
+                            .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                        Ok(CveId::new(year, number))
+                    }
+
+                    fn visit_map<V>(self, mut map: V) -> Result<CveId, V::Error>
+                    where
+                        V: MapAccess<'de>,
+                    {
+                        let mut year = None;
+                        let mut number = None;
+                        while let Some(key) = map.next_key()? {
+                            match key {
+                                Field::Year => {
+                                    if year.is_some() {
+                                        return Err(de::Error::duplicate_field("year"));
+                                    }
+                                    year = Some(map.next_value()?);
+                                }
+                                Field::Number => {
+                                    if number.is_some() {
+                                        return Err(de::Error::duplicate_field("number"));
+                                    }
+                                    number = Some(map.next_value()?);
+                                }
+                            }
+                        }
+                        let year = year.ok_or_else(|| de::Error::missing_field("year"))?;
+                        let number = number.ok_or_else(|| de::Error::missing_field("number"))?;
+                        Ok(CveId::new(year, number))
+                    }
+                }
+
+                const FIELDS: &[&str] = &["year", "number"];
+                deserializer.deserialize_struct("CveId", FIELDS, CveIdVisitor)
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use crate::CveId;
+        use claims::{assert_ok, assert_ok_eq};
+        use serde::{Deserialize, Serialize};
+        use serde_assert::{Deserializer, Serializer, Token};
+
+        #[test]
+        fn test_serialize_binary() {
+            let serializer = Serializer::builder().is_human_readable(false).build();
+
+            let cve_id = CveId::new(1999, 1);
+
+            assert_ok_eq!(
+                cve_id.serialize(&serializer),
+                [
+                    Token::Struct {
+                        name: "CveId",
+                        len: 2
+                    },
+                    Token::Field("year"),
+                    Token::U16(1999),
+                    Token::Field("number"),
+                    Token::U64(1),
+                    Token::StructEnd
+                ]
+            );
+        }
+
+        #[test]
+        fn test_deserialize_binary() {
+            let mut deserializer = Deserializer::builder([
+                Token::Struct {
+                    name: "CveId",
+                    len: 2,
+                },
+                Token::Field("year"),
+                Token::U16(1999),
+                Token::Field("number"),
+                Token::U64(1),
+                Token::StructEnd,
+            ])
+            .is_human_readable(false)
+            .build();
+
+            let cve_id = CveId::new(1999, 1);
+
+            assert_ok_eq!(CveId::deserialize(&mut deserializer), cve_id);
+        }
+
+        #[test]
+        fn test_roundtrip_binary() {
+            let cve_id = CveId::new(1999, 1);
+
+            let serializer = Serializer::builder().is_human_readable(false).build();
+            let mut deserializer = Deserializer::builder(assert_ok!(cve_id.serialize(&serializer)))
+                .is_human_readable(false)
+                .build();
+
+            assert_ok_eq!(CveId::deserialize(&mut deserializer), cve_id);
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

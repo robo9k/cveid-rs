@@ -18,9 +18,16 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+serde = { version = "1", optional = true, default-features = false }
 
 [badges]
 maintenance = { status = "experimental" }
 
 [features]
 default = []
+## Enable `serde::{Deserialize, Serialize}` impls
+serde = ["dep:serde"]
+
+[dev-dependencies]
+claims = "0.8"
+serde_assert = "0.8"

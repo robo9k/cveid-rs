@@ -1,6 +1,7 @@
 //! # Features
 //!
 //! - `serde` — Enable serializing and deserializing [`CveId`] using `serde` v1
+//! - `schemars` — Enable JSON schema for [`CveId`] using `schemars` v1
 
 #![deny(unsafe_code)]
 #![cfg_attr(not(any(test)), no_std)]
@@ -8,7 +9,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg_hide))]
 #![cfg_attr(docsrs, doc(cfg_hide(docsrs)))]
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "serde", feature = "schemars"))]
 extern crate alloc;
 
 // TODO: Ord
@@ -426,6 +427,47 @@ mod serde {
                 .build();
 
             assert_ok_eq!(CveId::deserialize(&mut deserializer), cve_id);
+        }
+    }
+}
+
+#[cfg(feature = "schemars")]
+mod schemars {
+    use crate::CveId;
+    use alloc::borrow::Cow;
+    use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
+
+    #[cfg_attr(docsrs, doc(cfg(feature = "schemars")))]
+    impl JsonSchema for CveId {
+        fn schema_name() -> Cow<'static, str> {
+            "CveId".into()
+        }
+
+        fn schema_id() -> Cow<'static, str> {
+            "cve_id::CveId".into()
+        }
+
+        fn json_schema(_: &mut SchemaGenerator) -> Schema {
+            json_schema!({
+                "type": "string",
+                "pattern": r"^CVE-[0-9]{4}-[0-9]{4,19}$"
+            })
+        }
+
+        fn inline_schema() -> bool {
+            true
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use crate::CveId;
+        use schemars::JsonSchema;
+
+        #[test]
+        fn test_jsonschema() {
+            fn assert_jsonschema<T: JsonSchema>() {}
+            assert_jsonschema::<CveId>();
         }
     }
 }

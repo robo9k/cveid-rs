@@ -19,6 +19,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 serde = { version = "1", optional = true, default-features = false }
+schemars = { version = "1", optional = true, default-features = false }
 
 [badges]
 maintenance = { status = "experimental" }
@@ -27,6 +28,8 @@ maintenance = { status = "experimental" }
 default = []
 ## Enable `serde::{Deserialize, Serialize}` impls
 serde = ["dep:serde"]
+## Enable `schemars::JsonSchema` impl
+schemars = ["dep:schemars"]
 
 [dev-dependencies]
 claims = "0.8"

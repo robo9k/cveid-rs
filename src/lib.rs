@@ -559,6 +559,9 @@ mod serde {
         use serde::{Deserialize, Serialize};
         use serde_assert::{Deserializer, Serializer, Token};
 
+        // TODO: proptest any valid CveId should roundtrip binary
+        // TODO: proptest any valid CveId should roundtrip human-readable
+
         #[test]
         fn test_serialize_binary() -> Result<(), Box<dyn std::error::Error>> {
             let serializer = Serializer::builder().is_human_readable(false).build();
@@ -706,6 +709,9 @@ mod schemars {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // TODO: proptest any str should not panic when parsing CveId
+    // TODO: proptest any valid year & number should parse back equal
 
     #[test]
     fn test_send() {

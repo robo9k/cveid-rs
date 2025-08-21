@@ -24,6 +24,7 @@
 //! let cve_max = CveId::new(CveYear::new(9999)?, 9_999_999_999_999_999_999);
 //!
 //! assert!(CveId::from_str("CAN-1999-0067").is_err());
+//! assert!(CveId::from_str("CVE-1900-0420")?.is_example_or_test());
 //! # Ok(())
 //! # }
 //! ```

@@ -26,10 +26,12 @@ maintenance = { status = "experimental" }
 
 [features]
 default = []
+alloc = []
+std = ["alloc"]
 ## Enable `serde::{Deserialize, Serialize}` impls
 serde = ["dep:serde"]
 ## Enable `schemars::JsonSchema` impl
-schemars = ["dep:schemars"]
+schemars = ["dep:schemars", "alloc"]
 
 [dev-dependencies]
 claims = "0.8"

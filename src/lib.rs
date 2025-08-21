@@ -9,7 +9,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg_hide))]
 #![cfg_attr(docsrs, doc(cfg_hide(docsrs)))]
 
-#[cfg(any(feature = "serde", feature = "schemars"))]
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
 // TODO: Ord
@@ -128,6 +128,7 @@ impl CveId {
             return Err(ParseCveIdError());
         }
 
+        // FIXME: if year > 9999 then first separator would be elsewhere, but that's syntactically not valid, need to introduce fallible Result API
         if src[3] != Self::SEPARATOR || src[8] != Self::SEPARATOR {
             return Err(ParseCveIdError());
         }
@@ -209,7 +210,7 @@ mod serde {
     use crate::CveId;
     use ::serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
     use ::serde::ser::{Serialize, SerializeStruct, Serializer};
-    use alloc::string::{String, ToString};
+    use core::fmt::Write;
 
     #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
     impl Serialize for CveId {
@@ -218,7 +219,44 @@ mod serde {
             S: Serializer,
         {
             if serializer.is_human_readable() {
-                self.to_string().serialize(serializer)
+                struct Wrapper<'a> {
+                    buf: &'a mut [u8],
+                    offset: usize,
+                }
+
+                impl<'a> Wrapper<'a> {
+                    fn new(buf: &'a mut [u8]) -> Self {
+                        Wrapper {
+                            buf: buf,
+                            offset: 0,
+                        }
+                    }
+                }
+
+                impl<'a> core::fmt::Write for Wrapper<'a> {
+                    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+                        let bytes = s.as_bytes();
+
+                        let remainder = &mut self.buf[self.offset..];
+                        if remainder.len() < bytes.len() {
+                            return Err(core::fmt::Error);
+                        }
+                        let remainder = &mut remainder[..bytes.len()];
+                        remainder.copy_from_slice(bytes);
+
+                        self.offset += bytes.len();
+
+                        Ok(())
+                    }
+                }
+
+                // "CVE" "-" CveYear::MAX "-" CveNumber::MAX
+                let mut buf = [0 as u8; 3 + 1 + 5 + 1 + 20];
+                let mut wrapper = Wrapper::new(&mut buf);
+                write!(wrapper, "{}", self).expect("can write to fixed buffer");
+                let chars = &wrapper.buf[0..wrapper.offset];
+                let s = str::from_utf8(chars).expect("valid ASCII");
+                serializer.serialize_str(s)
             } else {
                 let mut state = serializer.serialize_struct("CveId", 2)?;
                 state.serialize_field("year", &self.year)?;
@@ -235,8 +273,8 @@ mod serde {
             D: Deserializer<'de>,
         {
             if deserializer.is_human_readable() {
-                let s = String::deserialize(deserializer)?;
-                CveId::from_str(&s).map_err(de::Error::custom)
+                let s = <&str>::deserialize(deserializer)?;
+                CveId::from_str(s).map_err(de::Error::custom)
             } else {
                 enum Field {
                     Year,
@@ -334,7 +372,7 @@ mod serde {
 
     #[cfg(test)]
     mod tests {
-        use crate::CveId;
+        use crate::{CveId, CveNumber, CveYear};
         use claims::{assert_ok, assert_ok_eq};
         use serde::{Deserialize, Serialize};
         use serde_assert::{Deserializer, Serializer, Token};
@@ -407,7 +445,7 @@ mod serde {
 
         #[test]
         fn test_roundtrip_binary() {
-            let cve_id = CveId::new(1999, 1);
+            let cve_id = CveId::new(CveYear::MIN, CveNumber::MIN);
 
             let serializer = Serializer::builder().is_human_readable(false).build();
             let mut deserializer = Deserializer::builder(assert_ok!(cve_id.serialize(&serializer)))
@@ -419,7 +457,7 @@ mod serde {
 
         #[test]
         fn test_roundtrip_human() {
-            let cve_id = CveId::new(1999, 1);
+            let cve_id = CveId::new(/*CveYear::MAX*/ 9999, CveNumber::MAX);
 
             let serializer = Serializer::builder().is_human_readable(true).build();
             let mut deserializer = Deserializer::builder(assert_ok!(cve_id.serialize(&serializer)))
@@ -536,6 +574,26 @@ mod tests {
     fn test_isexampleortest() {
         assert!(CveId::new(1900, 666).is_example_or_test());
         assert!(!CveId::new(1999, 1).is_example_or_test());
+    }
+
+    #[test]
+    fn test_min() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            CveId::new(CveYear::MIN, CveNumber::MIN),
+            "CVE-0000-0000".parse()?
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_max() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            CveId::new(/*CveYear::MAX*/ 9999, CveNumber::MAX),
+            "CVE-9999-18446744073709551615".parse()?
+        );
+
+        Ok(())
     }
 }
 

@@ -12,16 +12,16 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+/// Common Vulnerabilities and Exposures Identifier
 // TODO: Ord
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct CveId {
-    // TODO: u8 would be sufficient for e.g. 1900 + 255 = 2155
     year: CveYear,
     // TODO: the JSON schema specifies 4-19 digits, but u32 would provide 4_294_967_295 MAX which already seems plenty per year
     number: CveNumber,
 }
 
-pub type CveYear = u16;
+/// Sequential number of [`CveId`]
 pub type CveNumber = u64;
 
 const fn u8_slice_eq(left: &[u8], right: &[u8]) -> bool {
@@ -128,7 +128,6 @@ impl CveId {
             return Err(ParseCveIdError());
         }
 
-        // FIXME: if year > 9999 then first separator would be elsewhere, but that's syntactically not valid, need to introduce fallible Result API
         if src[3] != Self::SEPARATOR || src[8] != Self::SEPARATOR {
             return Err(ParseCveIdError());
         }
@@ -159,6 +158,8 @@ impl CveId {
         let year = unwrap_or_PCE!(u16_from_ascii(year));
         let number = unwrap_or_PCE!(u64_from_ascii(number));
 
+        let year = unwrap_or_PCE!(CveYear::new(year));
+
         Ok(Self { year, number })
     }
 
@@ -172,7 +173,7 @@ impl CveId {
 
     // https://www.cve.org/ResourcesSupport/AllResources/CNARules#section_5-4_Example_or_Test_CVE_IDs
     pub const fn is_example_or_test(&self) -> bool {
-        1900 == self.year
+        1900 == self.year.0
     }
 
     // TODO: validate if .year is within 1999-$currentYear and .number  >= 1 ?
@@ -190,10 +191,72 @@ impl core::str::FromStr for CveId {
 
 impl core::fmt::Display for CveId {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(f, "CVE-{:04}-{:04}", self.year, self.number)
+        write!(f, "CVE-{}-{:04}", self.year, self.number)
     }
 }
 
+/// Year of [`CveId`]
+// TODO: u8 would be sufficient for e.g. 1900 + 255 = 2155
+// TODO: Ord
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct CveYear(u16);
+
+impl CveYear {
+    const YEAR_MIN: u16 = 0;
+    const YEAR_MAX: u16 = 9999;
+    pub const MIN: Self = CveYear(Self::YEAR_MIN);
+    pub const MAX: Self = CveYear(Self::YEAR_MAX);
+
+    pub const fn new(year: u16) -> Result<Self, InvalidCveYearError> {
+        if year > Self::YEAR_MAX {
+            return Err(InvalidCveYearError());
+        }
+
+        Ok(Self(year))
+    }
+
+    // TODO: const from_str
+}
+
+impl core::convert::TryFrom<u16> for CveYear {
+    type Error = InvalidCveYearError;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+impl core::convert::From<CveYear> for u16 {
+    fn from(year: CveYear) -> Self {
+        year.0
+    }
+}
+
+impl PartialEq<u16> for CveYear {
+    fn eq(&self, other: &u16) -> bool {
+        self.0 == *other
+    }
+}
+
+impl core::fmt::Display for CveYear {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{:04}", self.0)
+    }
+}
+
+/// Invalid value error for [`CveYear`]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidCveYearError();
+
+impl core::fmt::Display for InvalidCveYearError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "invalid CVE year")
+    }
+}
+
+impl core::error::Error for InvalidCveYearError {}
+
+/// Parse error for [`CveId`]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseCveIdError();
 
@@ -207,7 +270,7 @@ impl core::error::Error for ParseCveIdError {}
 
 #[cfg(feature = "serde")]
 mod serde {
-    use crate::CveId;
+    use crate::{CveId, CveYear};
     use ::serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
     use ::serde::ser::{Serialize, SerializeStruct, Serializer};
     use core::fmt::Write;
@@ -370,6 +433,51 @@ mod serde {
         }
     }
 
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+    impl Serialize for CveYear {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serializer.serialize_newtype_struct("CveYear", &self.0)
+        }
+    }
+
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+    impl<'de> Deserialize<'de> for CveYear {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            struct CveYearVisitor;
+
+            impl<'de> Visitor<'de> for CveYearVisitor {
+                type Value = CveYear;
+
+                fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+                    formatter.write_str("struct CveYear")
+                }
+
+                fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+                where
+                    D: Deserializer<'de>,
+                {
+                    let year = deserializer.deserialize_u16(self)?;
+                    Ok(year)
+                }
+
+                fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+                {
+                    CveYear::new(v).map_err(E::custom)
+                }
+            }
+
+            deserializer.deserialize_newtype_struct("CveYear", CveYearVisitor)
+        }
+    }
+
     #[cfg(test)]
     mod tests {
         use crate::{CveId, CveNumber, CveYear};
@@ -378,10 +486,10 @@ mod serde {
         use serde_assert::{Deserializer, Serializer, Token};
 
         #[test]
-        fn test_serialize_binary() {
+        fn test_serialize_binary() -> Result<(), Box<dyn std::error::Error>> {
             let serializer = Serializer::builder().is_human_readable(false).build();
 
-            let cve_id = CveId::new(1999, 1);
+            let cve_id = CveId::new(1999.try_into()?, 1);
 
             assert_ok_eq!(
                 cve_id.serialize(&serializer),
@@ -391,34 +499,40 @@ mod serde {
                         len: 2
                     },
                     Token::Field("year"),
+                    Token::NewtypeStruct { name: "CveYear" },
                     Token::U16(1999),
                     Token::Field("number"),
                     Token::U64(1),
                     Token::StructEnd
                 ]
             );
+
+            Ok(())
         }
 
         #[test]
-        fn test_serialize_human() {
+        fn test_serialize_human() -> Result<(), Box<dyn std::error::Error>> {
             let serializer = Serializer::builder().is_human_readable(true).build();
 
-            let cve_id = CveId::new(1999, 1);
+            let cve_id = CveId::new(1999.try_into()?, 1);
 
             assert_ok_eq!(
                 cve_id.serialize(&serializer),
                 [Token::Str("CVE-1999-0001".to_string())]
             );
+
+            Ok(())
         }
 
         #[test]
-        fn test_deserialize_binary() {
+        fn test_deserialize_binary() -> Result<(), Box<dyn std::error::Error>> {
             let mut deserializer = Deserializer::builder([
                 Token::Struct {
                     name: "CveId",
                     len: 2,
                 },
                 Token::Field("year"),
+                Token::NewtypeStruct { name: "CveYear" },
                 Token::U16(1999),
                 Token::Field("number"),
                 Token::U64(1),
@@ -427,20 +541,24 @@ mod serde {
             .is_human_readable(false)
             .build();
 
-            let cve_id = CveId::new(1999, 1);
+            let cve_id = CveId::new(1999.try_into()?, 1);
 
             assert_ok_eq!(CveId::deserialize(&mut deserializer), cve_id);
+
+            Ok(())
         }
 
         #[test]
-        fn test_deserialize_human() {
+        fn test_deserialize_human() -> Result<(), Box<dyn std::error::Error>> {
             let mut deserializer = Deserializer::builder([Token::Str("CVE-1999-0001".to_string())])
                 .is_human_readable(true)
                 .build();
 
-            let cve_id = CveId::new(1999, 1);
+            let cve_id = CveId::new(1999.try_into()?, 1);
 
             assert_ok_eq!(CveId::deserialize(&mut deserializer), cve_id);
+
+            Ok(())
         }
 
         #[test]
@@ -457,7 +575,7 @@ mod serde {
 
         #[test]
         fn test_roundtrip_human() {
-            let cve_id = CveId::new(/*CveYear::MAX*/ 9999, CveNumber::MAX);
+            let cve_id = CveId::new(CveYear::MAX, CveNumber::MAX);
 
             let serializer = Serializer::builder().is_human_readable(true).build();
             let mut deserializer = Deserializer::builder(assert_ok!(cve_id.serialize(&serializer)))
@@ -527,25 +645,38 @@ mod tests {
     }
 
     #[test]
-    fn test_debug() {
+    fn test_debug() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
-            format!("{:?}", CveId::new(1999, 1)),
-            "CveId { year: 1999, number: 1 }"
+            format!("{:?}", CveId::new(1999.try_into()?, 1)),
+            "CveId { year: CveYear(1999), number: 1 }"
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_display() {
-        assert_eq!(format!("{}", CveId::new(1999, 1)), "CVE-1999-0001");
-        assert_eq!(format!("{}", CveId::new(1900, 424242)), "CVE-1900-424242");
+    fn test_display() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(
+            format!("{}", CveId::new(1999.try_into()?, 1)),
+            "CVE-1999-0001"
+        );
+        assert_eq!(
+            format!("{}", CveId::new(1900.try_into()?, 424242)),
+            "CVE-1900-424242"
+        );
+
+        Ok(())
     }
 
     #[test]
     fn test_from_str() -> Result<(), Box<dyn std::error::Error>> {
-        assert_eq!(CveId::from_str("CVE-1999-0001")?, CveId::new(1999, 1));
+        assert_eq!(
+            CveId::from_str("CVE-1999-0001")?,
+            CveId::new(1999.try_into()?, 1)
+        );
         assert_eq!(
             CveId::from_str("CVE-1900-424242")?,
-            CveId::new(1900, 424242)
+            CveId::new(1900.try_into()?, 424242)
         );
 
         assert_eq!(CveId::from_str("hurz").unwrap_err(), ParseCveIdError());
@@ -566,14 +697,18 @@ mod tests {
     }
 
     #[test]
-    fn test_fromstr() {
-        assert_eq!("CVE-1999-0001".parse(), Ok(CveId::new(1999, 1)));
+    fn test_fromstr() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!("CVE-1999-0001".parse(), Ok(CveId::new(1999.try_into()?, 1)));
+
+        Ok(())
     }
 
     #[test]
-    fn test_isexampleortest() {
-        assert!(CveId::new(1900, 666).is_example_or_test());
-        assert!(!CveId::new(1999, 1).is_example_or_test());
+    fn test_isexampleortest() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(CveId::new(1900.try_into()?, 666).is_example_or_test());
+        assert!(!CveId::new(1999.try_into()?, 1).is_example_or_test());
+
+        Ok(())
     }
 
     #[test]
@@ -589,7 +724,7 @@ mod tests {
     #[test]
     fn test_max() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
-            CveId::new(/*CveYear::MAX*/ 9999, CveNumber::MAX),
+            CveId::new(CveYear::MAX, CveNumber::MAX),
             "CVE-9999-18446744073709551615".parse()?
         );
 

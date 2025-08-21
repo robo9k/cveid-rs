@@ -35,6 +35,13 @@
 //! - `schemars` — Enable JSON schema for [`CveId`] using `schemars` v1
 //! - `arbitrary` — Enable generating arbitrary [`CveId`] using `arbitrary` v1
 
+// TODO: proper CveNumber newtype and then From<(CveYear, CveNumber))> for CveId
+// TODO: test data from CVE-10K
+// TODO: nightly core::iter::Step
+// TODO: proper private error kinds
+// TODO: nightly rustc_layout_scalar_valid_range_start rustc_layout_scalar_valid_range_end rustc_nonnull_optimization_guaranteed for CveNumber
+// TODO: repr transparent for newtypes
+
 #![deny(unsafe_code)]
 #![cfg_attr(not(any(test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]

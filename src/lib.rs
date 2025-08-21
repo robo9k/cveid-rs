@@ -33,6 +33,7 @@
 //!
 //! - `serde` — Enable serializing and deserializing [`CveId`] using `serde` v1
 //! - `schemars` — Enable JSON schema for [`CveId`] using `schemars` v1
+//! - `arbitrary` — Enable generating arbitrary [`CveId`] using `arbitrary` v1
 
 #![deny(unsafe_code)]
 #![cfg_attr(not(any(test)), no_std)]
@@ -42,6 +43,9 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+
+#[cfg(feature = "std")]
+extern crate std;
 
 /// Common Vulnerabilities and Exposures Identifier
 ///
@@ -242,6 +246,17 @@ impl core::fmt::Display for CveId {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+#[cfg_attr(docsrs, doc(cfg(feature = "arbitrary")))]
+impl<'a> arbitrary::Arbitrary<'a> for CveId {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let year = arbitrary::Arbitrary::arbitrary(u)?;
+        let number = arbitrary::Arbitrary::arbitrary(u)?;
+
+        Ok(Self { year, number })
+    }
+}
+
 /// Year YYYY part of [`CveId`]
 ///
 /// Syntactically valid years are 0000 through 9999.
@@ -291,6 +306,15 @@ impl PartialEq<u16> for CveYear {
 impl core::fmt::Display for CveYear {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{:04}", self.0)
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+#[cfg_attr(docsrs, doc(cfg(feature = "arbitrary")))]
+impl<'a> arbitrary::Arbitrary<'a> for CveYear {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let year = u.int_in_range(Self::YEAR_MIN..=Self::YEAR_MAX)?;
+        Ok(Self(year))
     }
 }
 

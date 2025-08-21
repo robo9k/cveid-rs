@@ -20,6 +20,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 serde = { version = "1", optional = true, default-features = false }
 schemars = { version = "1", optional = true, default-features = false }
+arbitrary = { version = "1", optional = true, default-features = false }
 
 [badges]
 maintenance = { status = "experimental" }
@@ -32,6 +33,8 @@ std = ["alloc"]
 serde = ["dep:serde"]
 ## Enable `schemars::JsonSchema` impl
 schemars = ["dep:schemars", "alloc"]
+## Enable `arbitrary::Arbitrary` impl
+arbitrary = ["dep:arbitrary", "std"]
 
 [dev-dependencies]
 claims = "0.8"

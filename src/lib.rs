@@ -1,3 +1,33 @@
+//! # About CVEs
+//!
+//! The [Common Vulnerabilities and Exposures (CVEs) program](https://www.cve.org/About/Overview) catalogs publicly disclosed information-security vulnerabilities.
+//!
+//! This catalog contains one so-called CVE Record for each vulnerability.
+//! Each record has an identifier ([CVE ID](https://www.cve.org/ResourcesSupport/Glossary#glossaryCVEID)) in the format "CVE-YYYY-NNNN"; that is the prefix "CVE", a 4-digit year and then a 4+digit number, separated by "-" (dashes).
+//!
+//! # About this crate
+//!
+//! This crate implements a [`CveId`] type for syntactically valid CVE IDs. It does not implement other fields of a CVE Record.
+//!
+//! The crate does not implement other semantic rules, e.g.
+//! - CVEs were first assigned with start of the program in 1999
+//! - the first number each year is 1
+//!
+//! Syntactically "CVE-0000-0000" and "CVE-9999-9999999999999999999" are valid.
+//!
+//! ```rust
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! use cve_id::{CveId, CveYear};
+//!
+//! let cve_min = CveId::new(0.try_into()?, 0);
+//! let cve_first = "CVE-1999-0001".parse::<CveId>()?;
+//! let cve_max = CveId::new(CveYear::new(9999)?, 9_999_999_999_999_999_999);
+//!
+//! assert!(CveId::from_str("CAN-1999-0067").is_err());
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! # Features
 //!
 //! - `serde` — Enable serializing and deserializing [`CveId`] using `serde` v1
@@ -13,6 +43,8 @@
 extern crate alloc;
 
 /// Common Vulnerabilities and Exposures Identifier
+///
+/// Id of a CVE in the "CVE-YYYY-NNNN" format.
 // TODO: Ord
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct CveId {
@@ -21,7 +53,7 @@ pub struct CveId {
     number: CveNumber,
 }
 
-/// Sequential number of [`CveId`]
+/// Sequential number NNNN part of [`CveId`]
 pub type CveNumber = u64;
 
 const fn u8_slice_eq(left: &[u8], right: &[u8]) -> bool {
@@ -115,11 +147,13 @@ impl CveId {
     const CVE_PREFIX: &[u8] = b"CVE";
     const SEPARATOR: u8 = b'-';
 
+    /// Constructs a semantically valid CVE ID
     #[inline]
     pub const fn new(year: CveYear, number: CveNumber) -> Self {
         Self { year, number }
     }
 
+    /// Parses a CVE ID in the "CVE-YYYY-NNNN" format
     pub const fn from_str(src: &str) -> Result<Self, ParseCveIdError> {
         let src = src.as_bytes();
 
@@ -163,15 +197,27 @@ impl CveId {
         Ok(Self { year, number })
     }
 
+    /// Returns the YYYY year part of the CVE ID
     pub const fn year(&self) -> CveYear {
         self.year
     }
 
+    /// Returns the NNNN number part of the CVE ID
     pub const fn number(&self) -> CveNumber {
         self.number
     }
 
-    // https://www.cve.org/ResourcesSupport/AllResources/CNARules#section_5-4_Example_or_Test_CVE_IDs
+    /// Returns whether the CVE ID is "for example, documentation, and testing purposes"
+    ///
+    /// [CVE Numbering Authority (CNA) Operational Rules - 5.4 Example or Test CVE IDs](https://www.cve.org/ResourcesSupport/AllResources/CNARules#section_5-4_Example_or_Test_CVE_IDs)
+    /// specifies:
+    ///
+    /// > *5.4.1*
+    /// > For example, documentation, and testing purposes, CVE Program participants SHOULD use CVE IDs with the prefix “CVE-1900-” that otherwise conform to the current CVE ID specification.
+    /// >
+    /// > *5.4.2*
+    /// > CVE Program participants MUST treat CVE IDs and CVE Records using the “CVE-1900-” prefix as test or example information and MUST NOT treat them as correct, live, or production information.
+    /// > The CVE Services do not support CVE IDs with this prefix.
     pub const fn is_example_or_test(&self) -> bool {
         1900 == self.year.0
     }
@@ -195,7 +241,9 @@ impl core::fmt::Display for CveId {
     }
 }
 
-/// Year of [`CveId`]
+/// Year YYYY part of [`CveId`]
+///
+/// Syntactically valid years are 0000 through 9999.
 // TODO: u8 would be sufficient for e.g. 1900 + 255 = 2155
 // TODO: Ord
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -207,6 +255,7 @@ impl CveYear {
     pub const MIN: Self = CveYear(Self::YEAR_MIN);
     pub const MAX: Self = CveYear(Self::YEAR_MAX);
 
+    /// Constructs a semantically valid CVE year
     pub const fn new(year: u16) -> Result<Self, InvalidCveYearError> {
         if year > Self::YEAR_MAX {
             return Err(InvalidCveYearError());
@@ -593,6 +642,7 @@ mod schemars {
     use alloc::borrow::Cow;
     use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 
+    /// JSON schema matching `cveId` from [CVE JSON record format](https://cveproject.github.io/cve-schema/schema/docs/)
     #[cfg_attr(docsrs, doc(cfg(feature = "schemars")))]
     impl JsonSchema for CveId {
         fn schema_name() -> Cow<'static, str> {

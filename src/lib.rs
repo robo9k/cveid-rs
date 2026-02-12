@@ -262,6 +262,23 @@ impl<'a> arbitrary::Arbitrary<'a> for CveId {
 
         Ok(Self { year, number })
     }
+
+    #[inline]
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        Self::try_size_hint(depth).unwrap_or_default()
+    }
+
+    #[inline]
+    fn try_size_hint(
+        depth: usize,
+    ) -> core::result::Result<(usize, Option<usize>), arbitrary::MaxRecursionReached> {
+        arbitrary::size_hint::try_recursion_guard(depth, |depth| {
+            Ok(arbitrary::size_hint::and_all(&[
+                <CveYear as arbitrary::Arbitrary>::try_size_hint(depth)?,
+                <CveNumber as arbitrary::Arbitrary>::try_size_hint(depth)?,
+            ]))
+        })
+    }
 }
 
 /// Year YYYY part of [`CveId`]
@@ -322,6 +339,12 @@ impl<'a> arbitrary::Arbitrary<'a> for CveYear {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         let year = u.int_in_range(Self::YEAR_MIN..=Self::YEAR_MAX)?;
         Ok(Self(year))
+    }
+
+    #[inline]
+    fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+        let n = mem::size_of::<u16>();
+        (n, Some(n))
     }
 }
 

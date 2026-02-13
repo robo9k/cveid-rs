@@ -343,7 +343,7 @@ impl<'a> arbitrary::Arbitrary<'a> for CveYear {
 
     #[inline]
     fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-        let n = mem::size_of::<u16>();
+        let n = core::mem::size_of::<u16>();
         (n, Some(n))
     }
 }

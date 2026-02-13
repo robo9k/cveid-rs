@@ -375,8 +375,8 @@ impl core::error::Error for ParseCveIdError {}
 #[cfg(feature = "serde")]
 mod serde {
     use crate::{CveId, CveYear};
-    use ::serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
-    use ::serde::ser::{Serialize, SerializeStruct, Serializer};
+    use ::serde_core::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+    use ::serde_core::ser::{Serialize, SerializeStruct, Serializer};
     use core::fmt::Write;
 
     #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
@@ -586,8 +586,8 @@ mod serde {
     mod tests {
         use crate::{CveId, CveNumber, CveYear};
         use claims::{assert_ok, assert_ok_eq};
-        use serde::{Deserialize, Serialize};
         use serde_assert::{Deserializer, Serializer, Token};
+        use serde_core::{Deserialize, Serialize};
 
         // TODO: proptest any valid CveId should roundtrip binary
         // TODO: proptest any valid CveId should roundtrip human-readable

@@ -45,8 +45,7 @@
 #![deny(unsafe_code)]
 #![cfg_attr(not(any(test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(docsrs, feature(doc_cfg_hide))]
-#![cfg_attr(docsrs, doc(cfg_hide(docsrs)))]
+#![cfg_attr(docsrs, doc(auto_cfg(hide(docsrs))))]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

@@ -16,7 +16,7 @@ checksum = "bba18ee93d577a8428902687bcc2b6b45a56b1981a1f6d779731c86cc4c5db18"
 
 [[package]]
 name = "cve-id"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "arbitrary",
  "claims",
